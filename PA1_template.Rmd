@@ -1,0 +1,113 @@
+---
+title: "Reproducible Research Peer Assessment 1"
+author: "Wellian Wiranto"
+date: "11 August 2015"
+output: html_document
+---
+
+#Background
+
+It is now possible to collect a large amount of data about personal movement using activity monitoring devices such as a Fitbit, Nike Fuelband, or Jawbone Up. These type of devices are part of the “quantified self” movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. But these data remain under-utilized both because the raw data are hard to obtain and there is a lack of statistical methods and software for processing and interpreting the data.
+
+This assignment makes use of data from a personal activity monitoring device. This device collects data at 5 minute intervals through out the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
+
+#Loading and Preprocessing Data
+```{r, echo=TRUE}
+setwd("~/Documents/Coursera")
+activity <- read.csv("activity.csv", header=TRUE, na.strings="NA")
+date <- as.Date(activity$date, "%d/%m/%y") 
+```
+
+#Analyzing Steps Taken per Day
+```{r, echo=TRUE}
+daily <- tapply(activity$steps, format(date, '%d/%m/%y'), sum) 
+
+hist(daily, main="Histogram of Steps Taken", 
+     xlab="Number of steps taken per day",
+     col="light blue")
+
+#Mean and median of the total number of steps taken per day:
+mean(daily, na.rm=TRUE)
+#format(mean, nsmall=2)
+median(daily, na.rm=TRUE)
+```
+
+#Analyzing the Average Daily Pattern
+```{r, echo=TRUE}
+time <- tapply(activity$steps, activity$interval, mean, na.rm=TRUE)
+
+plot(row.names(time), time, type="l", 
+     xlab="5-min Interval", ylab="Average Steps Taken", 
+       main="Average daily activity pattern", col="blue")
+
+#When does the maximum number of steps, on average, take place?
+interval <- which.max(time)
+names(interval)
+```
+
+#Imputing missing values
+
+Calculating total number of missing values
+```{r, echo=TRUE}
+sum(is.na(activity$steps))
+```
+
+Going to replace missing values with mean values of the 5-min interval.  
+
+First, I'd calculate the mean values for each of the intervals.  
+```{r, echo=TRUE}
+data.int.mean <- aggregate(steps ~ interval, FUN=mean, data=activity)
+```
+
+Then, I'd merge this interval-mean data into the original set
+```{r, echo=TRUE}
+data.merge <- merge(x=activity, y=data.int.mean, by="interval")
+
+# adding Steps column, which picks original (steps.x) if not missing, otherwise replacing it with the mean value (steps.y)
+data.merge$steps <- ifelse(is.na(data.merge$steps.x), data.merge$steps.y, 
+                           data.merge$steps.x) 
+
+# selecting the relevant columns
+good.data <- data.merge[c("steps", "date", "interval")]
+```
+
+Now, going to plot the histogram of the filled-in data
+```{r, echo=TRUE}
+good.daily <- tapply(good.data$steps, format(date, '%d/%m/%y'), sum) 
+
+hist(good.daily, main="Histogram of Steps Taken", 
+     xlab="Number of steps taken per day",
+     col="light blue")
+
+#Mean and median of the total number of steps taken per day:
+mean(good.daily, na.rm=TRUE)
+#format(mean, nsmall=2)
+median(good.daily, na.rm=TRUE)
+```
+The mean is the same as before, but the median has shifted.
+
+#Weekday vs. Weekend
+Are there differences in activity patterns between weekdays and weekends?
+
+First, classify each date to see if it falls on a weekday or a weekend.
+```{r, echo=TRUE}
+good.data$dayofweek <- weekdays(date)
+good.data$day.type <- as.factor(ifelse(weekdays(date) %in% c("Saturday", "Sunday"), "weekend", "weekday"))
+```
+
+Then, making a panel plot containing a time series plot (i.e. type = “l”) of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). 
+
+```{r, echo=TRUE}
+# aggregating by day type
+daytype.agg <- aggregate(steps ~ day.type + interval, 
+                         FUN=mean, data=good.data)
+
+# making plots per day type
+library(lattice)
+xyplot(steps ~ interval | day.type, daytype.agg
+     , type = "l"
+     , xlab = "Interval"
+     , ylab = "Number of steps"
+     , main = "Average number of steps taken, for weekend and weekday"
+     , layout = c(1, 2))
+```
